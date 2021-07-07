@@ -32,23 +32,24 @@ var _ = Describe("Jenkins controller", func() {
 	)
 
 	BeforeEach(func() {
-		namespace = createNamespace()
+		namespace = CreateNamespace()
 
 		configureAuthorizationToUnSecure(namespace.Name, userConfigurationConfigMapName)
 		jenkins = createJenkinsCR(jenkinsCRName, namespace.Name, nil, groovyScripts, casc, priorityClassName)
 	})
 
 	AfterEach(func() {
-		destroyNamespace(namespace)
+		ShowLogsIfTestHasFailed(CurrentGinkgoTestDescription().Failed, namespace.Name)
+		DestroyNamespace(namespace)
 	})
 
 	Context("when restarting Jenkins master pod", func() {
 		It("new Jenkins Master pod should be created", func() {
-			waitForJenkinsBaseConfigurationToComplete(jenkins)
+			WaitForJenkinsBaseConfigurationToComplete(jenkins)
 			restartJenkinsMasterPod(jenkins)
 			waitForRecreateJenkinsMasterPod(jenkins)
 			checkBaseConfigurationCompleteTimeIsNotSet(jenkins)
-			waitForJenkinsBaseConfigurationToComplete(jenkins)
+			WaitForJenkinsBaseConfigurationToComplete(jenkins)
 		})
 	})
 })
@@ -80,20 +81,20 @@ var _ = Describe("Jenkins controller", func() {
 	)
 
 	BeforeEach(func() {
-		namespace = createNamespace()
+		namespace = CreateNamespace()
 
 		configureAuthorizationToUnSecure(namespace.Name, userConfigurationConfigMapName)
 		jenkins = createJenkinsCRSafeRestart(jenkinsCRName, namespace.Name, nil, groovyScripts, casc, priorityClassName)
 	})
 
 	AfterEach(func() {
-		destroyNamespace(namespace)
+		DestroyNamespace(namespace)
 	})
 
 	Context("when running Jenkins safe restart", func() {
 		It("authorization strategy is not overwritten", func() {
-			waitForJenkinsBaseConfigurationToComplete(jenkins)
-			waitForJenkinsUserConfigurationToComplete(jenkins)
+			WaitForJenkinsBaseConfigurationToComplete(jenkins)
+			WaitForJenkinsUserConfigurationToComplete(jenkins)
 			jenkinsClient, cleanUpFunc := verifyJenkinsAPIConnection(jenkins, namespace.Name)
 			defer cleanUpFunc()
 			checkIfAuthorizationStrategyUnsecuredIsSet(jenkinsClient)

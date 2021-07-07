@@ -8,33 +8,28 @@ description: >
 ---
 
 {{% pageinfo %}}
-This document describes installation procedure for **Jenkins Operator**.
+This document describes installation procedure for **Jenkins Operator**. 
 All container images can be found at [virtuslab/jenkins-operator](https://hub.docker.com/r/virtuslab/jenkins-operator)
 {{% /pageinfo %}}
 
 ## Requirements
  
 To run **Jenkins Operator**, you will need:
+- access to a Kubernetes cluster version `1.17+`
+- `kubectl` version `1.17+`
 
-- access to a Kubernetes cluster version `1.11+`
 
-- `kubectl` version `1.11+`
+Listed below are the two ways to deploy Jenkins Operator. For details on how to customize your Jenkins instance, refer to [Getting Started](/kubernetes-operator/docs/installation/)
 
-## Configure Custom Resource Definition 
+## Deploy Jenkins Operator using YAML's
 
-Install Jenkins Custom Resource Definition:
+First, install Jenkins Custom Resource Definition:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/jenkinsci/kubernetes-operator/master/deploy/crds/jenkins_v1alpha2_jenkins_crd.yaml
+kubectl apply -f https://raw.githubusercontent.com/jenkinsci/kubernetes-operator/master/config/crd/bases/jenkins.io_jenkins.yaml 
 ```
 
-## Deploy Jenkins Operator
-
-There are two ways to deploy the Jenkins Operator.
-
-### Using YAML's
-
-Apply Service Account and RBAC roles:
+Then, apply the operator and other required resources:
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/jenkinsci/kubernetes-operator/master/deploy/all-in-one-v1alpha2.yaml
@@ -47,10 +42,11 @@ kubectl get pods -w
 ```
 
 Now **Jenkins Operator** should be up and running in the `default` namespace.
+For deploying Jenkins, refer to [Deploy Jenkins section](/kubernetes-operator/docs/installation/latest/deploy-jenkins/).
 
-### Using Helm Chart
+## Deploy Jenkins Operator using Helm Chart
 
-There is a option to use Helm to install the operator. It requires the Helm 3+ for deployment.
+Alternatively, you can also use Helm to install the Operator (and optionally, by default, Jenkins). It requires the Helm 3+ for deployment.
 
 Create a namespace for the operator:
 

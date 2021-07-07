@@ -30,13 +30,11 @@ spec:
               containerPort: 80
               protocol: TCP
           command:
-            - jenkins-operator
+            - /manager
           args: []
           env:
             - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: {{ .Values.jenkins.namespace }}
             - name: POD_NAME
               valueFrom:
                 fieldRef:

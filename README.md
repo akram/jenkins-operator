@@ -1,7 +1,7 @@
 # Jenkins Operator
 
-[![Version](https://img.shields.io/badge/version-v0.5.0-brightgreen.svg)](https://github.com/jenkinsci/kubernetes-operator/releases/tag/v0.5.0)
-[![Build Status](https://travis-ci.org/jenkinsci/kubernetes-operator.svg?branch=master)](https://travis-ci.org/jenkinsci/kubernetes-operator)
+[![Version](https://img.shields.io/badge/version-v0.6.0-brightgreen.svg)](https://github.com/jenkinsci/kubernetes-operator/releases/tag/v0.6.0)
+[![Build status](https://github.com/jenkinsci/kubernetes-operator/actions/workflows/auto-tests.yaml/badge.svg)](https://github.com/jenkinsci/kubernetes-operator/actions/workflows/auto-tests.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jenkinsci/kubernetes-operator "Go Report Card")](https://goreportcard.com/report/github.com/jenkinsci/kubernetes-operator)
 [![Docker Pulls](https://img.shields.io/docker/pulls/virtuslab/jenkins-operator.svg)](https://hub.docker.com/r/virtuslab/jenkins-operator/tags)
 
@@ -65,6 +65,12 @@ Selected content:
 
 We have a dedicated channel called `#jenkins-operator` on [virtuslab-oss.slack.com](https://virtuslab-oss.slack.com)
 Fill out ([Invite form](https://forms.gle/X3X8qA1XMirdBuEH7)) and come say hi !
+
+## Snapshots between releases
+
+We are trying our best to resolve issues quickly, but they have to wait to be released. If you can't wait for an official 
+docker image release and acknowledge the risk, you can use our unofficial images, which are built nightly. 
+Look for the images with tag "{git-hash}", where {git-hash} is the hash of the master commit that interests you.
 
 ## Contribution
 

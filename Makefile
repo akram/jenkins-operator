@@ -89,10 +89,16 @@ test: ## Runs the go tests
 	@RUNNING_TESTS=1 go test -tags "$(BUILDTAGS) cgo" $(PACKAGES_FOR_UNIT_TESTS)
 
 .PHONY: e2e
-e2e: deepcopy-gen ## Runs e2e tests, you can use EXTRA_ARGS
+e2e: deepcopy-gen manifests ## Runs e2e tests, you can use EXTRA_ARGS
 	@echo "+ $@"
-	RUNNING_TESTS=1 go test -parallel=1 "./test/e2e/" -tags "$(BUILDTAGS) cgo" -v -timeout 60m -run "$(E2E_TEST_SELECTOR)" \
+	RUNNING_TESTS=1 go test -parallel=1 "./test/e2e/" -ginkgo.v -tags "$(BUILDTAGS) cgo" -v -timeout 60m -run "$(E2E_TEST_SELECTOR)" \
 		-jenkins-api-hostname=$(JENKINS_API_HOSTNAME) -jenkins-api-port=$(JENKINS_API_PORT) -jenkins-api-use-nodeport=$(JENKINS_API_USE_NODEPORT) $(E2E_TEST_ARGS)
+
+.PHONY: helm-e2e
+IMAGE_NAME := $(DOCKER_REGISTRY):$(GITCOMMIT)
+helm-e2e: helm container-runtime-build ## Runs helm e2e tests, you can use EXTRA_ARGS
+	@echo "+ $@"
+	RUNNING_TESTS=1 go test -parallel=1 "./test/helm/" -ginkgo.v -tags "$(BUILDTAGS) cgo" -v -timeout 60m -run "$(E2E_TEST_SELECTOR)" -image-name=$(IMAGE_NAME) $(E2E_TEST_ARGS)
 
 .PHONY: vet
 vet: ## Verifies `go vet` passes
@@ -136,7 +142,7 @@ install: ## Installs the executable
 .PHONY: run
 run: export WATCH_NAMESPACE = $(NAMESPACE)
 run: export OPERATOR_NAME = $(NAME)
-run: fmt vet manifests install-crds build ## Run the executable, you can use EXTRA_ARGS
+run: fmt vet install-crds build ## Run the executable, you can use EXTRA_ARGS
 	@echo "+ $@"
 ifeq ($(KUBERNETES_PROVIDER),minikube)
 	kubectl config use-context $(KUBECTL_CONTEXT)
@@ -221,7 +227,7 @@ container-runtime-push: ## Push the container
 	$(CONTAINER_RUNTIME_COMMAND) push $(DOCKER_ORGANIZATION)/$(DOCKER_REGISTRY):$(BUILD_TAG) $(CONTAINER_RUNTIME_EXTRA_ARGS)
 
 .PHONY: container-runtime-snapshot-push
-container-runtime-snapshot-push:
+container-runtime-snapshot-push: container-runtime-build
 	@echo "+ $@"
 	$(CONTAINER_RUNTIME_COMMAND) tag $(DOCKER_REGISTRY):$(GITCOMMIT) $(DOCKER_ORGANIZATION)/$(DOCKER_REGISTRY):$(GITCOMMIT) $(CONTAINER_RUNTIME_EXTRA_ARGS)
 	$(CONTAINER_RUNTIME_COMMAND) push $(DOCKER_ORGANIZATION)/$(DOCKER_REGISTRY):$(GITCOMMIT) $(CONTAINER_RUNTIME_EXTRA_ARGS)
@@ -278,10 +284,10 @@ HAS_GEN_CRD_API_REFERENCE_DOCS := $(shell ls gen-crd-api-reference-docs 2> /dev/
 scheme-doc-gen: ## Generate Jenkins CRD scheme doc
 	@echo "+ $@"
 ifndef HAS_GEN_CRD_API_REFERENCE_DOCS
-	@wget https://github.com/ahmetb/$(GEN_CRD_API)/releases/download/v0.1.2/$(GEN_CRD_API)_linux_amd64.tar.gz
+	@wget https://github.com/ahmetb/$(GEN_CRD_API)/releases/download/v0.1.2/$(GEN_CRD_API)_$(PLATFORM)_amd64.tar.gz
 	@mkdir -p $(GEN_CRD_API)
-	@tar -C $(GEN_CRD_API) -zxf $(GEN_CRD_API)_linux_amd64.tar.gz
-	@rm $(GEN_CRD_API)_linux_amd64.tar.gz
+	@tar -C $(GEN_CRD_API) -zxf $(GEN_CRD_API)_$(PLATFORM)_amd64.tar.gz
+	@rm $(GEN_CRD_API)_$(PLATFORM)_amd64.tar.gz
 endif
 	$(GEN_CRD_API)/$(GEN_CRD_API) -config gen-crd-api-config.json -api-dir $(PKG)/api/$(API_VERSION) -template-dir $(GEN_CRD_API)/template -out-file documentation/$(VERSION)/jenkins-$(API_VERSION)-scheme.md
 
@@ -299,6 +305,18 @@ check-crc: ## Checks if KUBERNETES_PROVIDER is set to crc
 	@echo "KUBERNETES_PROVIDER '$(KUBERNETES_PROVIDER)'"
 ifneq ($(KUBERNETES_PROVIDER),crc)
 	$(error KUBERNETES_PROVIDER not set to 'crc')
+endif
+
+.PHONY: helm
+HAS_HELM := $(shell which $(PROJECT_DIR)/bin/helm)
+helm: ## Download helm if it's not present
+	@echo "+ $@"
+ifndef HAS_HELM
+	mkdir -p $(PROJECT_DIR)/bin
+	curl -Lo bin/helm.tar.gz https://get.helm.sh/helm-v$(HELM_VERSION)-$(PLATFORM)-amd64.tar.gz && tar xzfv bin/helm.tar.gz -C $(PROJECT_DIR)/bin
+	mv $(PROJECT_DIR)/bin/$(PLATFORM)-amd64/helm $(PROJECT_DIR)/bin/helm
+	rm -rf $(PROJECT_DIR)/bin/$(PLATFORM)-amd64
+	rm -rf $(PROJECT_DIR)/bin/helm.tar.gz
 endif
 
 .PHONY: minikube
@@ -327,6 +345,7 @@ HAS_SEMBUMP := $(shell which $(PROJECT_DIR)/bin/sembump)
 sembump: # Download sembump locally if necessary
 	@echo "+ $@"
 ifndef HAS_SEMBUMP
+	mkdir bin
 	wget -O $(PROJECT_DIR)/bin/sembump https://github.com/justintout/sembump/releases/download/v0.1.0/sembump-$(PLATFORM)-amd64
 	chmod +x $(PROJECT_DIR)/bin/sembump
 endif
@@ -339,14 +358,18 @@ bump-version: sembump ## Bump the version in the version file. Set BUMP to [ pat
 	@echo "Bumping VERSION.txt from $(VERSION) to $(NEW_VERSION)"
 	echo $(NEW_VERSION) > VERSION.txt
 	@echo "Updating version from $(VERSION) to $(NEW_VERSION) in README.md"
-	sed -i s/$(VERSION)/$(NEW_VERSION)/g README.md
-	sed -i s/$(VERSION)/$(NEW_VERSION)/g deploy/operator.yaml
-	sed -i s/$(VERSION)/$(NEW_VERSION)/g deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
-	cp deploy/service_account.yaml deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
-	cat deploy/role.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
-	cat deploy/role_binding.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
-	cat deploy/operator.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
-	git add VERSION.txt README.md deploy/operator.yaml deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	sed -i.bak 's/$(VERSION)/$(NEW_VERSION)/g' README.md
+	sed -i.bak 's/$(VERSION)/$(NEW_VERSION)/g' deploy/operator.yaml
+	sed -i.bak 's/$(VERSION)/$(NEW_VERSION)/g' deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	rm */**.bak
+	rm *.bak
+	cp config/service_account.yaml deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	cat config/rbac/leader_election_role.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	cat config/rbac/leader_election_role_binding.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	cat config/rbac/role.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	cat config/rbac/role_binding.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	cat config/manager/manager.yaml >> deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
+	git add VERSION.txt README.md config/manager/manager.yaml deploy/$(ALL_IN_ONE_DEPLOY_FILE_PREFIX)-$(API_VERSION).yaml
 	git commit -vaem "Bump version to $(NEW_VERSION)"
 	@echo "Run make tag to create and push the tag for new version $(NEW_VERSION)"
 
@@ -379,19 +402,25 @@ endif
 	go mod vendor -v
 	@echo
 
+.PHONY: helm-lint
+helm-lint: helm
+	@echo "+ $@"
+	bin/helm lint chart/jenkins-operator
+
 .PHONY: helm-package
-helm-package:
+helm-package: helm
 	@echo "+ $@"
 	mkdir -p /tmp/jenkins-operator-charts
 	mv chart/jenkins-operator/*.tgz /tmp/jenkins-operator-charts
-	cd chart && helm package jenkins-operator
+	cd chart && ../bin/helm package jenkins-operator
 	mv /tmp/jenkins-operator-charts/*.tgz chart/jenkins-operator/
 	rm -rf /tmp/jenkins-operator-charts/
+	git add chart/jenkins-operator-*.tgz
 
 .PHONY: helm-deploy
 helm-deploy: helm-package
 	@echo "+ $@"
-	helm repo index chart/ --url https://raw.githubusercontent.com/jenkinsci/kubernetes-operator/master/chart/jenkins-operator/
+	bin/helm repo index chart/ --url https://raw.githubusercontent.com/jenkinsci/kubernetes-operator/master/chart/jenkins-operator/
 	cd chart/ && mv jenkins-operator-*.tgz jenkins-operator
 
 # Download and build hugo extended locally if necessary
@@ -413,16 +442,10 @@ generate-docs: hugo ## Re-generate docs directory from the website directory
 	cd website && npm install
 	$(HUGO_PATH)/hugo -s website -d ../docs
 
-.PHONY: all-in-one-build
-FILENAME := config/all_in_one_$(API_VERSION).yaml
-all-in-one-build: ## Re-generate all-in-one yaml
+.PHONY: run-docs
+run-docs: hugo
 	@echo "+ $@"
-	> $(FILENAME)
-	cat config/rbac/leader_election_role.yaml >> $(FILENAME)
-	cat config/rbac/leader_election_role_binding.yaml >> $(FILENAME)
-	cat config/rbac/role.yaml >> $(FILENAME)
-	cat config/rbac/role_binding.yaml >> $(FILENAME)
-	cat config/manager/manager.yaml >> $(FILENAME)
+	cd website && $(HUGO_PATH)/hugo server -D
 
 ##################### FROM OPERATOR SDK ########################
 # Install CRDs into a cluster
@@ -443,7 +466,7 @@ undeploy:
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen all-in-one-build
+manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Generate code
